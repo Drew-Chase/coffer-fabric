@@ -3,13 +3,12 @@
 	"id": "coffer",
 	"version": "${version}",
 	"name": "Coffer",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"description": "Performance-focused inventory storage and event-driven item transfer for Fabric.",
 	"authors": [
-		"Me!"
+		"Drew-Chase"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"sources": "https://github.com/Drew-Chase/coffer-fabric"
 	},
 	"license": "CC0-1.0",
 	"icon": "assets/coffer/icon.png",

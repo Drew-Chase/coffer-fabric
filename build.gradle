@@ -21,6 +21,9 @@ repositories {
 dependencies {
     // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    // MC 26.x ships non-obfuscated: the game already uses official Mojang names at
+    // runtime, so Loom requires no separate `mappings` dependency. All mixin targets
+    // use Mojang names directly.
 
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
