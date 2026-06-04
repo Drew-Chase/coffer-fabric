@@ -1,5 +1,6 @@
 package com.github.drewchase;
 
+import com.github.drewchase.connection.EndpointResolverManager;
 import com.github.drewchase.storage.InventoryStoreManager;
 import com.github.drewchase.transfer.TransferNetworkManager;
 import net.fabricmc.api.ModInitializer;
@@ -25,5 +26,10 @@ public class Coffer implements ModInitializer {
 		// position-keyed registry of which transfer entities care about which inventories.
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> TransferNetworkManager.bind());
 		ServerLifecycleEvents.SERVER_STOPPED.register(server -> TransferNetworkManager.unbind());
+
+		// Bind the UUID->endpoint resolver (Phase 4 connections). Indexes loaded endpoints so
+		// connections can be resolved, freshness-checked, and torn down by UUID.
+		ServerLifecycleEvents.SERVER_STARTING.register(server -> EndpointResolverManager.bind());
+		ServerLifecycleEvents.SERVER_STOPPED.register(server -> EndpointResolverManager.unbind());
 	}
 }

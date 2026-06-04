@@ -1,12 +1,15 @@
 package com.github.drewchase.mixin;
 
+import com.github.drewchase.connection.Connections;
 import com.github.drewchase.transfer.CofferTransfer;
 import com.github.drewchase.transfer.TransferNetwork;
 import com.github.drewchase.transfer.TransferNetworkManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.Container;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.HopperBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
@@ -71,10 +74,29 @@ public abstract class HopperPollingMixin implements CofferTransfer {
             return;
         }
         Direction facing = state.getValue(HopperBlock.FACING);
-        net.register(level, pos.relative(facing), pos); // eject target (the block it faces)
-        net.register(level, pos.above(), pos);          // suck source (the block above)
-        net.register(level, pos, pos);                  // self (e.g. a player inserting items)
+        BlockPos target = pos.relative(facing); // eject target (the block it faces)
+        BlockPos source = pos.above();          // suck source (the block above)
+        net.register(level, target, pos);
+        net.register(level, source, pos);
+        net.register(level, pos, pos);          // self (e.g. a player inserting items)
+
+        // Phase 4: form the persistent bidirectional connection records with the adjacent
+        // inventories ("create on place" — runs the tick after placement, when neighbours are
+        // loaded), and run the one-time load freshness prune on our own restored edges.
+        BlockEntity self = (BlockEntity) (Object) this;
+        Connections.checkFreshness(self);
+        this.coffer$connectInventory(level, target);
+        this.coffer$connectInventory(level, source);
+
         this.coffer$registered = true;
+    }
+
+    @Unique
+    private void coffer$connectInventory(Level level, BlockPos endpointPos) {
+        BlockEntity endpoint = level.getBlockEntity(endpointPos);
+        if (endpoint instanceof Container) {
+            Connections.connect((BlockEntity) (Object) this, endpoint);
+        }
     }
 
     @Inject(method = "pushItemsTick", at = @At("HEAD"), cancellable = true)
