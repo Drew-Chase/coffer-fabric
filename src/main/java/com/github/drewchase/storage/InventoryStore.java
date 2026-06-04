@@ -23,13 +23,19 @@ import java.util.UUID;
  * ({@code inventories/<2hex>/<uuid>.dat}) to avoid a single directory holding millions of files.
  * Each file is GZip-compressed NBT.
  *
- * <p>Phase 1 (eager) note: reads and writes here are synchronous. Laziness, threading, and the
- * comparator/redstone tension are deferred to Phase 2.
+ * <p>UUIDs are global, but an inventory belongs to a dimension. Rather than per-dimension
+ * directories (which complicate a single UUID-&gt;endpoint resolver), the dimension key is embedded
+ * inside the stored file under {@link #DIMENSION_KEY}, with the contents under {@link #CONTENTS_KEY}.
+ *
+ * <p>Reads and writes are synchronous (Phase 2 threading decision: start synchronous, optimize in
+ * Phase 6).
  */
 public final class InventoryStore {
 
     private static final String ROOT_DIR_NAME = "inventories";
     private static final String FILE_EXTENSION = ".dat";
+    private static final String DIMENSION_KEY = "coffer:dimension";
+    private static final String CONTENTS_KEY = "coffer:contents";
 
     private final Path rootDir;
 
@@ -55,21 +61,28 @@ public final class InventoryStore {
     }
 
     /**
-     * Writes the full block-entity NBT for {@code uuid} to the store, creating shard directories as
-     * needed. Failures are logged, not thrown — a missing side file is recovered as an empty load.
+     * Writes the full block-entity NBT for {@code uuid} to the store, tagging it with its dimension,
+     * creating shard directories as needed. Failures are logged, not thrown — a missing side file is
+     * recovered as an empty load.
+     *
+     * @param dimensionId the dimension this inventory belongs to (e.g. {@code minecraft:overworld}).
      */
-    public void write(UUID uuid, CompoundTag contents) {
+    public void write(UUID uuid, String dimensionId, CompoundTag contents) {
         Path file = pathFor(uuid);
+        CompoundTag envelope = new CompoundTag();
+        envelope.putString(DIMENSION_KEY, dimensionId);
+        envelope.put(CONTENTS_KEY, contents);
         try {
             Files.createDirectories(file.getParent());
-            NbtIo.writeCompressed(contents, file);
+            NbtIo.writeCompressed(envelope, file);
         } catch (IOException e) {
             Coffer.LOGGER.error("Failed to write inventory contents for {} to {}", uuid, file, e);
         }
     }
 
     /**
-     * Reads the full block-entity NBT for {@code uuid}, or {@code null} if no file exists yet.
+     * Reads the full block-entity contents NBT for {@code uuid}, or {@code null} if no file exists
+     * yet. The dimension envelope is unwrapped; only the contents tag is returned.
      */
     @Nullable
     public CompoundTag read(UUID uuid) {
@@ -78,7 +91,8 @@ public final class InventoryStore {
             return null;
         }
         try {
-            return NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap());
+            CompoundTag envelope = NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap());
+            return envelope.getCompound(CONTENTS_KEY).orElse(null);
         } catch (IOException e) {
             Coffer.LOGGER.error("Failed to read inventory contents for {} from {}", uuid, file, e);
             return null;
