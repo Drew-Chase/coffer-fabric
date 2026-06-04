@@ -12,7 +12,8 @@
 		"ContainerAccessLoadTriggerMixin",
 		"ContainerAccessRecordMixin",
 		"HopperPollingMixin",
-		"MarkDirtyMixin"
+		"MarkDirtyMixin",
+		"MinecartContainerStorageMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
