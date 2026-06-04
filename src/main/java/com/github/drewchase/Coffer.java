@@ -1,6 +1,7 @@
 package com.github.drewchase;
 
 import com.github.drewchase.storage.InventoryStoreManager;
+import com.github.drewchase.transfer.TransferNetworkManager;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 
@@ -19,5 +20,10 @@ public class Coffer implements ModInitializer {
 		// integrated-server sessions.
 		ServerLifecycleEvents.SERVER_STARTING.register(InventoryStoreManager::bind);
 		ServerLifecycleEvents.SERVER_STOPPED.register(server -> InventoryStoreManager.unbind());
+
+		// Bind the runtime transfer network (Phase 3 event-driven transfers). Holds the
+		// position-keyed registry of which transfer entities care about which inventories.
+		ServerLifecycleEvents.SERVER_STARTING.register(server -> TransferNetworkManager.bind());
+		ServerLifecycleEvents.SERVER_STOPPED.register(server -> TransferNetworkManager.unbind());
 	}
 }
