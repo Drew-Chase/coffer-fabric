@@ -34,6 +34,13 @@ public interface CofferInventory {
     void coffer$markUnloaded();
 
     /**
+     * @return {@code true} while contents are being hydrated from the store. The deferred-load hook
+     * must check this and do nothing, otherwise the hydrate's own {@code loadAdditional} pass would
+     * re-mark the container unloaded and reset the cached signal.
+     */
+    boolean coffer$isHydrating();
+
+    /**
      * @return the cached comparator signal (0-15) read from the stub, served to redstone without
      * loading contents.
      */

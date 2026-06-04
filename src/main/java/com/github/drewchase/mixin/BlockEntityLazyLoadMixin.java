@@ -57,6 +57,11 @@ public abstract class BlockEntityLazyLoadMixin implements CofferInventory {
     }
 
     @Override
+    public boolean coffer$isHydrating() {
+        return this.coffer$hydrating;
+    }
+
+    @Override
     public int coffer$cachedSignal() {
         return this.coffer$signal;
     }

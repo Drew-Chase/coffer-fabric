@@ -30,14 +30,17 @@ import java.util.UUID;
  * side store, leaving only a stub (UUID + cached comparator signal) in the region.
  *
  * <p>On save, for a loaded container, the full contents are mirrored to the store and the {@code
- * "Items"} key is stripped from the region {@link ValueOutput} via {@code discard}. The vanilla
- * subclass {@code saveAdditional} runs first and writes {@code "Items"}; this TAIL inject removes it
- * afterwards. A cached comparator signal is computed and written to the stub so redstone can read
- * fullness without a load.
+ * "Items"} key is stripped from the region {@link ValueOutput} via {@code discard}. The hook is on
+ * {@code saveWithFullMetadata} (the persistence entry point) at TAIL, so it runs AFTER the polymorphic
+ * subclass {@code saveAdditional} has written {@code "Items"} — a hook on {@code saveAdditional} TAIL
+ * would fire during the {@code super} call, before the subclass writes its items, and strip nothing.
+ * A cached comparator signal is computed and written to the stub so redstone can read fullness
+ * without a load.
  *
  * <p>On load, contents are NOT read eagerly — the block entity is marked unloaded (see {@link
  * com.github.drewchase.storage.CofferInventory}) and only the cached signal is restored. The first
- * interaction through {@code getItems()} triggers a synchronous hydrate from the store.
+ * interaction through {@code getItems()} triggers a synchronous hydrate from the store. The deferred
+ * hook skips the hydrate's own {@code loadAdditional} pass, or it would re-mark the container unloaded.
  *
  * <p>Saving an UNLOADED container must not clobber its on-disk contents with an empty inventory, so
  * that case skips the store write and just re-emits the previously cached signal.
@@ -54,18 +57,8 @@ public abstract class BlockEntityStubStorageMixin {
     @Shadow
     protected Level level;
 
-    /**
-     * Reentrancy guard: {@link #saveWithoutMetadata} calls {@code saveAdditional}, so re-serializing
-     * from inside the {@code saveAdditional} TAIL would recurse infinitely without this gate.
-     */
-    @Unique
-    private boolean coffer$mirroring;
-
-    @Inject(method = "saveAdditional", at = @At("TAIL"))
+    @Inject(method = "saveWithFullMetadata(Lnet/minecraft/world/level/storage/ValueOutput;)V", at = @At("TAIL"))
     private void coffer$divertContentsToStore(ValueOutput output, CallbackInfo ci) {
-        if (this.coffer$mirroring) {
-            return;
-        }
         BlockEntity self = (BlockEntity) (Object) this;
         if (!(self instanceof Container container)) {
             return;
@@ -81,8 +74,8 @@ public abstract class BlockEntityStubStorageMixin {
         CofferInventory lazy = (CofferInventory) self;
         UUID uuid = ((CofferUuidHolder) self).coffer$getOrCreateUuid();
 
-        // Items were just written to the region by the vanilla subclass saveAdditional. They belong
-        // in the side store, not the region: strip them so the region keeps only the stub.
+        // The subclass saveAdditional has fully run by now, so "Items" is present in the region
+        // output. It belongs in the side store, not the region: strip it so the region keeps the stub.
         output.discard("Items");
 
         if (!lazy.coffer$isLoaded()) {
@@ -96,18 +89,16 @@ public abstract class BlockEntityStubStorageMixin {
         lazy.coffer$setCachedSignal(signal);
         output.putInt(COFFER_SIGNAL_KEY, signal);
 
+        // Re-serialize the full contents (with "Items") into a fresh tag for the store. This uses
+        // saveWithoutMetadata, which is not the hooked method, so there is no re-entry here.
         RegistryAccess registries = serverLevel.registryAccess();
-        this.coffer$mirroring = true;
         CompoundTag fullContents;
         try (ProblemReporter.ScopedCollector reporter =
                      new ProblemReporter.ScopedCollector(self.problemPath(), Coffer.LOGGER)) {
             TagValueOutput capture = TagValueOutput.createWithContext(reporter, registries);
             this.saveWithoutMetadata(capture);
             fullContents = capture.buildResult();
-        } finally {
-            this.coffer$mirroring = false;
         }
-        // The captured tag still contains "Items" (full set) — exactly what we want in the store.
         // Mirror the connection set into the envelope so an offline counterpart's edge can be
         // removed by UUID without loading this chunk.
         store.write(uuid, serverLevel.dimension().identifier().toString(), fullContents,
@@ -125,6 +116,11 @@ public abstract class BlockEntityStubStorageMixin {
         }
 
         CofferInventory lazy = (CofferInventory) self;
+        // Skip the hydrate pass: ensureLoaded -> loadCustomOnly -> loadAdditional re-enters here, and
+        // re-marking unloaded / resetting the signal mid-hydrate would defeat the load.
+        if (lazy.coffer$isHydrating()) {
+            return;
+        }
         // Restore the cached comparator signal from the stub so redstone works pre-load.
         lazy.coffer$setCachedSignal(input.getIntOr(COFFER_SIGNAL_KEY, 0));
         // Defer the real contents load until first interaction.
