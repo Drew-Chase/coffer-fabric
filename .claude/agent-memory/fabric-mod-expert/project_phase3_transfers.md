@@ -37,7 +37,8 @@ edges. Bound/cleared per server via `TransferNetworkManager` in `Coffer.onInitia
 - Hoppers start awake (dormant=false), so pre-existing contents are handled on first load tick
   (the §6 "initial scan").
 - Registration is lazy (first tick) and idempotent; pruning is lazy (on markDirty when the target
-  is no longer a CofferTransfer). Phase 4 replaces this whole runtime layer with the durable
-  resolver + connection records, so do NOT build persistence on top of TransferNetwork.
+  is no longer a CofferTransfer). NOTE: Phase 4 added the durable resolver + UUID connection records
+  ADDITIVELY (it did NOT replace TransferNetwork); the position-keyed runtime wake still drives
+  actual wakeups. Do NOT build persistence on top of TransferNetwork — use the Phase 4 connections.
 - `BlockState.getValue(HopperBlock.FACING)` gives hopper facing; `HopperBlock.FACING` /
   `HopperBlock.ENABLED` are the relevant properties.
