@@ -9,9 +9,10 @@ contents live in the side store and load on first interaction.
 
 **Mechanism (all on `BlockEntity` / `BaseContainerBlockEntity` mixins, server-side only):**
 - Save: vanilla subclass `saveAdditional` writes items under the `"Items"` key; a TAIL inject on
-  `BlockEntity.saveAdditional` calls `output.discard("Items")` to strip them from the region, then
-  mirrors the full `saveWithoutMetadata` capture to the side store (reentrancy-guarded against the
-  inner `saveAdditional`).
+  `BlockEntity.saveWithFullMetadata(ValueOutput)` (NOT saveAdditional — see Phase 6 fix) calls
+  `output.discard("Items")` to strip them from the region, then mirrors the full
+  `saveWithoutMetadata` capture to the side store. (CORRECTED in Phase 6: the original hook on
+  `saveAdditional` TAIL fired before the subclass wrote Items and stripped nothing.)
 - Load: TAIL inject on `BlockEntity.loadAdditional` does NOT read items — it marks the BE unloaded
   (`CofferInventory#coffer$markUnloaded`) and restores only the cached signal.
 - Trigger: `coffer$ensureLoaded()` hydrates via `BlockEntity.loadCustomOnly(TagValueInput)`. It is
