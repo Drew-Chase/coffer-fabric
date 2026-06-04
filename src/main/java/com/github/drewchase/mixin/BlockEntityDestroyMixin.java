@@ -14,12 +14,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * block entity is actually removed/replaced (a real break), on the server, and NOT on chunk unload —
  * exactly the signal we want for tearing down connections. Vanilla uses it to drop container
  * contents; we additionally drop this endpoint's edges, notifying each counterpart (live object or,
- * if its chunk is unloaded, its side-store file) to remove the reciprocal edge.
+ * if its chunk is unloaded, its side-store file) to remove the reciprocal edge, and delete this
+ * endpoint's own orphaned store file.
+ *
+ * <p>Injected at TAIL so it runs AFTER vanilla {@code dropContents} — which loads the contents from
+ * the store to spawn them — otherwise deleting the store file first would drop an empty inventory.
  */
 @Mixin(BlockEntity.class)
 public abstract class BlockEntityDestroyMixin {
 
-    @Inject(method = "preRemoveSideEffects", at = @At("HEAD"))
+    @Inject(method = "preRemoveSideEffects", at = @At("TAIL"))
     private void coffer$tearDownConnections(BlockPos pos, BlockState state, CallbackInfo ci) {
         Connections.destroy((BlockEntity) (Object) this);
     }

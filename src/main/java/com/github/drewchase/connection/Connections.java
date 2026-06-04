@@ -83,5 +83,10 @@ public final class Connections {
             }
         }
         conn.coffer$connections().clear();
+
+        // Orphan-file GC: a permanently removed endpoint must not leave its side-store file behind.
+        if (store != null) {
+            store.delete(selfUuid);
+        }
     }
 }

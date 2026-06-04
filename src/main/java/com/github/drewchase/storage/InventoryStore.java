@@ -151,4 +151,18 @@ public final class InventoryStore {
     public boolean exists(UUID uuid) {
         return Files.isRegularFile(pathFor(uuid));
     }
+
+    /**
+     * Deletes the store file for {@code uuid}, if present. Called when an endpoint is permanently
+     * removed (broken) so it does not leave an orphaned side-store file. Best-effort; failures are
+     * logged, not thrown.
+     */
+    public void delete(UUID uuid) {
+        Path file = pathFor(uuid);
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException e) {
+            Coffer.LOGGER.error("Failed to delete orphaned inventory file for {} at {}", uuid, file, e);
+        }
+    }
 }
