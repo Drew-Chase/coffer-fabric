@@ -1,9 +1,13 @@
 package com.github.drewchase.storage;
 
 import com.github.drewchase.Coffer;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
+import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 import org.jetbrains.annotations.Nullable;
@@ -11,7 +15,9 @@ import org.jetbrains.annotations.Nullable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -36,6 +42,7 @@ public final class InventoryStore {
     private static final String FILE_EXTENSION = ".dat";
     private static final String DIMENSION_KEY = "coffer:dimension";
     private static final String CONTENTS_KEY = "coffer:contents";
+    private static final String CONNECTIONS_KEY = "coffer:connections";
 
     private final Path rootDir;
 
@@ -67,17 +74,56 @@ public final class InventoryStore {
      *
      * @param dimensionId the dimension this inventory belongs to (e.g. {@code minecraft:overworld}).
      */
-    public void write(UUID uuid, String dimensionId, CompoundTag contents) {
+    public void write(UUID uuid, String dimensionId, CompoundTag contents, Set<UUID> connections) {
         Path file = pathFor(uuid);
         CompoundTag envelope = new CompoundTag();
         envelope.putString(DIMENSION_KEY, dimensionId);
         envelope.put(CONTENTS_KEY, contents);
+        envelope.put(CONNECTIONS_KEY, encodeConnections(connections));
         try {
             Files.createDirectories(file.getParent());
             NbtIo.writeCompressed(envelope, file);
         } catch (IOException e) {
             Coffer.LOGGER.error("Failed to write inventory contents for {} to {}", uuid, file, e);
         }
+    }
+
+    /**
+     * Removes the edge to {@code other} from the persisted connection set of an OFFLINE endpoint
+     * {@code uuid}, by rewriting its store file. Used by destroy notification when a counterpart's
+     * chunk is unloaded, so the edge is dropped without loading it.
+     *
+     * @return {@code true} if an edge was removed and the file rewritten.
+     */
+    public boolean removeConnectionEdge(UUID uuid, UUID other) {
+        Path file = pathFor(uuid);
+        if (!Files.isRegularFile(file)) {
+            return false;
+        }
+        try {
+            CompoundTag envelope = NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap());
+            Set<UUID> connections = decodeConnections(envelope.get(CONNECTIONS_KEY));
+            if (!connections.remove(other)) {
+                return false;
+            }
+            envelope.put(CONNECTIONS_KEY, encodeConnections(connections));
+            NbtIo.writeCompressed(envelope, file);
+            return true;
+        } catch (IOException e) {
+            Coffer.LOGGER.error("Failed to remove connection edge {} from {} at {}", other, uuid, file, e);
+            return false;
+        }
+    }
+
+    private static Tag encodeConnections(Set<UUID> connections) {
+        return UUIDUtil.CODEC_SET.encodeStart(NbtOps.INSTANCE, connections).result().orElseGet(ListTag::new);
+    }
+
+    private static Set<UUID> decodeConnections(@Nullable Tag tag) {
+        if (tag == null) {
+            return new HashSet<>();
+        }
+        return UUIDUtil.CODEC_SET.parse(NbtOps.INSTANCE, tag).result().orElseGet(HashSet::new);
     }
 
     /**

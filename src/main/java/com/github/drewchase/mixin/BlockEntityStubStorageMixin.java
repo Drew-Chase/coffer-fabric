@@ -108,7 +108,10 @@ public abstract class BlockEntityStubStorageMixin {
             this.coffer$mirroring = false;
         }
         // The captured tag still contains "Items" (full set) — exactly what we want in the store.
-        store.write(uuid, serverLevel.dimension().identifier().toString(), fullContents);
+        // Mirror the connection set into the envelope so an offline counterpart's edge can be
+        // removed by UUID without loading this chunk.
+        store.write(uuid, serverLevel.dimension().identifier().toString(), fullContents,
+                ((com.github.drewchase.connection.CofferConnections) self).coffer$connections());
     }
 
     @Inject(method = "loadAdditional", at = @At("TAIL"))
