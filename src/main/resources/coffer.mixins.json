@@ -3,8 +3,11 @@
 	"package": "com.github.drewchase.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"mixins": [
+		"AbstractContainerMenuComparatorMixin",
+		"BlockEntityLazyLoadMixin",
+		"BlockEntityStubStorageMixin",
 		"BlockEntityUuidMixin",
-		"BlockEntityStubStorageMixin"
+		"ContainerAccessLoadTriggerMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
